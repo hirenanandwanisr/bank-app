@@ -1,4 +1,4 @@
-import express from 'express';
+import express, { query } from 'express';
 import mongoose from 'mongoose';
 
 import PostMessage from '../models/postMessage.js';
@@ -7,9 +7,70 @@ const router = express.Router();
 
 export const getPosts = async (req, res) => { 
     try {
-        const postMessages = await PostMessage.find();
+        let relation = req.query.relation || 'AND';
+        let city = req.query.city;
+        let minBalance = req.query.minBalance;
+        let maxBalance = req.query.maxBalance;
+        let minCredit = req.query.minCredit;
+        let maxCredit = req.query.maxCredit;
+        let haveMortgage = req.query.haveMortgage;
 
-        res.status(200).json(postMessages);
+        let balanceQuery;
+        
+        if(minBalance && maxBalance){
+            balanceQuery = {"balance": {$gt:minBalance, $lt:maxBalance}};
+        }else{
+            if(minBalance)
+            {
+                balanceQuery = {"balance": {$gt:minBalance}};
+            }else if(maxBalance){
+                balanceQuery = {"balance": {$lt:maxBalance}};
+            }
+        }
+        let creditQuery;
+        if(minCredit && maxCredit){
+            creditQuery = {"numCreditCards": {$gt:minCredit, $lt:maxCredit}};
+        }else{
+            if(minCredit)
+            {
+                creditQuery = {"numCreditCards": {$gt:minCredit}};
+            }else if(maxCredit){
+                creditQuery = {"numCreditCards": {$lt:maxCredit}};
+            }
+        }
+
+        let cityQuery;
+        if(city){
+            cityQuery = { city: { $in: city }};
+        }
+
+        let queryArray = [];
+        if(balanceQuery){
+            queryArray.push(balanceQuery);
+        }
+        if(creditQuery){
+            queryArray.push(creditQuery);
+        }
+        if(cityQuery){
+            queryArray.push(cityQuery);
+        }
+        if(haveMortgage){
+            queryArray.push({'haveMortgage': haveMortgage});
+        }
+
+        let where;
+        if(queryArray.length>0){
+            if(relation === 'AND'){
+                where= { $and: queryArray }
+            }else{
+                where = { $or: queryArray }
+            }
+        }else{
+            where = {}
+        }
+
+        const posts = await PostMessage.find(where);
+        res.status(200).json(posts);
     } catch (error) {
         res.status(404).json({ message: error.message });
     }
@@ -24,6 +85,22 @@ export const getPost = async (req, res) => {
         res.status(200).json(post);
     } catch (error) {
         res.status(404).json({ message: error.message });
+    }
+}
+
+export const cityList = async (req,res)=>{
+    try{
+        let city = await PostMessage.find().select('city');
+        let cities=[];city.forEach((element) => {
+            if(!cities.includes(element.city))
+            {
+                cities.push(element.city);
+            }
+        });
+
+        res.status(200).json(cities);
+    }catch(error){
+        res.status(404).json({ message:error.message });
     }
 }
 
